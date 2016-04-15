@@ -3,19 +3,17 @@ from __future__ import unicode_literals
 import re
 
 from .common import InfoExtractor
-from ..compat import (
-    compat_urllib_request,
-    compat_urllib_parse,
-)
 from ..utils import (
     ExtractorError,
+    sanitized_Request,
+    urlencode_postdata,
 )
 
 
 class MooshareIE(InfoExtractor):
     IE_NAME = 'mooshare'
     IE_DESC = 'Mooshare.biz'
-    _VALID_URL = r'http://(?:www\.)?mooshare\.biz/(?P<id>[\da-z]{12})'
+    _VALID_URL = r'https?://(?:www\.)?mooshare\.biz/(?P<id>[\da-z]{12})'
 
     _TESTS = [
         {
@@ -59,8 +57,8 @@ class MooshareIE(InfoExtractor):
             'hash': hash_key,
         }
 
-        request = compat_urllib_request.Request(
-            'http://mooshare.biz/%s' % video_id, compat_urllib_parse.urlencode(download_form))
+        request = sanitized_Request(
+            'http://mooshare.biz/%s' % video_id, urlencode_postdata(download_form))
         request.add_header('Content-Type', 'application/x-www-form-urlencoded')
 
         self._sleep(5, video_id)

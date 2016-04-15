@@ -9,7 +9,7 @@ import sys
 
 # Import youtube_dl
 ROOT_DIR = os.path.join(os.path.dirname(__file__), '..')
-sys.path.append(ROOT_DIR)
+sys.path.insert(0, ROOT_DIR)
 import youtube_dl
 
 
@@ -23,12 +23,12 @@ def main():
 
     def gen_ies_md(ies):
         for ie in ies:
-            ie_md = '**{}**'.format(ie.IE_NAME)
+            ie_md = '**{0}**'.format(ie.IE_NAME)
             ie_desc = getattr(ie, 'IE_DESC', None)
             if ie_desc is False:
                 continue
             if ie_desc is not None:
-                ie_md += ': {}'.format(ie.IE_DESC)
+                ie_md += ': {0}'.format(ie.IE_DESC)
             if not ie.working():
                 ie_md += ' (Currently broken)'
             yield ie_md

@@ -44,7 +44,7 @@ class SunPornoIE(InfoExtractor):
             webpage, 'duration', fatal=False))
 
         view_count = int_or_none(self._html_search_regex(
-            r'class="views">\s*(\d+)\s*<',
+            r'class="views">(?:<noscript>)?\s*(\d+)\s*<',
             webpage, 'view count', fatal=False))
         comment_count = int_or_none(self._html_search_regex(
             r'(\d+)</b> Comments?',
@@ -52,7 +52,7 @@ class SunPornoIE(InfoExtractor):
 
         formats = []
         quality = qualities(['mp4', 'flv'])
-        for video_url in re.findall(r'<source src="([^"]+)"', webpage):
+        for video_url in re.findall(r'<(?:source|video) src="([^"]+)"', webpage):
             video_ext = determine_ext(video_url)
             formats.append({
                 'url': video_url,

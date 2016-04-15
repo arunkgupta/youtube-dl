@@ -12,7 +12,7 @@ from ..utils import (
 
 
 class WatIE(InfoExtractor):
-    _VALID_URL = r'http://www\.wat\.tv/video/(?P<display_id>.*)-(?P<short_id>.*?)_.*?\.html'
+    _VALID_URL = r'(?:wat:(?P<real_id>\d{8})|https?://www\.wat\.tv/video/(?P<display_id>.*)-(?P<short_id>.*?)_.*?\.html)'
     IE_NAME = 'wat.tv'
     _TESTS = [
         {
@@ -54,10 +54,12 @@ class WatIE(InfoExtractor):
         def real_id_for_chapter(chapter):
             return chapter['tc_start'].split('-')[0]
         mobj = re.match(self._VALID_URL, url)
-        short_id = mobj.group('short_id')
         display_id = mobj.group('display_id')
-        webpage = self._download_webpage(url, display_id or short_id)
-        real_id = self._search_regex(r'xtpage = ".*-(.*?)";', webpage, 'real id')
+        real_id = mobj.group('real_id')
+        if not real_id:
+            short_id = mobj.group('short_id')
+            webpage = self._download_webpage(url, display_id or short_id)
+            real_id = self._search_regex(r'xtpage = ".*-(.*?)";', webpage, 'real id')
 
         video_info = self.download_video_info(real_id)
 
@@ -113,7 +115,7 @@ class WatIE(InfoExtractor):
             video_url = self._download_webpage(
                 'http://www.wat.tv/get%s?token=%s&getURL=1&country=%s' % (webid, compute_token(webid), country),
                 real_id,
-                'Downloding %s video URL' % fmt[0],
+                'Downloading %s video URL' % fmt[0],
                 'Failed to download %s video URL' % fmt[0],
                 False)
             if not video_url:

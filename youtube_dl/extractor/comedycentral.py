@@ -5,7 +5,7 @@ import re
 from .mtv import MTVServicesInfoExtractor
 from ..compat import (
     compat_str,
-    compat_urllib_parse,
+    compat_urllib_parse_urlencode,
 )
 from ..utils import (
     ExtractorError,
@@ -16,11 +16,11 @@ from ..utils import (
 
 class ComedyCentralIE(MTVServicesInfoExtractor):
     _VALID_URL = r'''(?x)https?://(?:www\.)?cc\.com/
-        (video-clips|episodes|cc-studios|video-collections|full-episodes)
+        (video-clips|episodes|cc-studios|video-collections|full-episodes|shows)
         /(?P<title>.*)'''
     _FEED_URL = 'http://comedycentral.com/feeds/mrss/'
 
-    _TEST = {
+    _TESTS = [{
         'url': 'http://www.cc.com/video-clips/kllhuv/stand-up-greg-fitzsimmons--uncensored---too-good-of-a-mother',
         'md5': 'c4f48e9eda1b16dd10add0744344b6d8',
         'info_dict': {
@@ -29,17 +29,20 @@ class ComedyCentralIE(MTVServicesInfoExtractor):
             'title': 'CC:Stand-Up|Greg Fitzsimmons: Life on Stage|Uncensored - Too Good of a Mother',
             'description': 'After a certain point, breastfeeding becomes c**kblocking.',
         },
-    }
+    }, {
+        'url': 'http://www.cc.com/shows/the-daily-show-with-trevor-noah/interviews/6yx39d/exclusive-rand-paul-extended-interview',
+        'only_matching': True,
+    }]
 
 
 class ComedyCentralShowsIE(MTVServicesInfoExtractor):
     IE_DESC = 'The Daily Show / The Colbert Report'
-    # urls can be abbreviations like :thedailyshow or :colbert
+    # urls can be abbreviations like :thedailyshow
     # urls for episodes like:
     # or urls for clips like: http://www.thedailyshow.com/watch/mon-december-10-2012/any-given-gun-day
     #                     or: http://www.colbertnation.com/the-colbert-report-videos/421667/november-29-2012/moon-shattering-news
     #                     or: http://www.colbertnation.com/the-colbert-report-collections/422008/festival-of-lights/79524
-    _VALID_URL = r'''(?x)^(:(?P<shortname>tds|thedailyshow|cr|colbert|colbertnation|colbertreport)
+    _VALID_URL = r'''(?x)^(:(?P<shortname>tds|thedailyshow)
                       |https?://(:www\.)?
                           (?P<showname>thedailyshow|thecolbertreport)\.(?:cc\.)?com/
                          ((?:full-)?episodes/(?:[0-9a-z]{6}/)?(?P<episode>.*)|
@@ -49,7 +52,9 @@ class ComedyCentralShowsIE(MTVServicesInfoExtractor):
                               |(watch/(?P<date>[^/]*)/(?P<tdstitle>.*))
                           )|
                           (?P<interview>
-                              extended-interviews/(?P<interID>[0-9a-z]+)/(?:playlist_tds_extended_)?(?P<interview_title>.*?)(/.*?)?)))
+                              extended-interviews/(?P<interID>[0-9a-z]+)/
+                              (?:playlist_tds_extended_)?(?P<interview_title>[^/?#]*?)
+                              (?:/[^/?#]?|[?#]|$))))
                      '''
     _TESTS = [{
         'url': 'http://thedailyshow.cc.com/watch/thu-december-13-2012/kristen-stewart',
@@ -62,6 +67,38 @@ class ComedyCentralShowsIE(MTVServicesInfoExtractor):
             'uploader': 'thedailyshow',
             'title': 'thedailyshow kristen-stewart part 1',
         }
+    }, {
+        'url': 'http://thedailyshow.cc.com/extended-interviews/b6364d/sarah-chayes-extended-interview',
+        'info_dict': {
+            'id': 'sarah-chayes-extended-interview',
+            'description': 'Carnegie Endowment Senior Associate Sarah Chayes discusses how corrupt institutions function throughout the world in her book "Thieves of State: Why Corruption Threatens Global Security."',
+            'title': 'thedailyshow Sarah Chayes Extended Interview',
+        },
+        'playlist': [
+            {
+                'info_dict': {
+                    'id': '0baad492-cbec-4ec1-9e50-ad91c291127f',
+                    'ext': 'mp4',
+                    'upload_date': '20150129',
+                    'description': 'Carnegie Endowment Senior Associate Sarah Chayes discusses how corrupt institutions function throughout the world in her book "Thieves of State: Why Corruption Threatens Global Security."',
+                    'uploader': 'thedailyshow',
+                    'title': 'thedailyshow sarah-chayes-extended-interview part 1',
+                },
+            },
+            {
+                'info_dict': {
+                    'id': '1e4fb91b-8ce7-4277-bd7c-98c9f1bbd283',
+                    'ext': 'mp4',
+                    'upload_date': '20150129',
+                    'description': 'Carnegie Endowment Senior Associate Sarah Chayes discusses how corrupt institutions function throughout the world in her book "Thieves of State: Why Corruption Threatens Global Security."',
+                    'uploader': 'thedailyshow',
+                    'title': 'thedailyshow sarah-chayes-extended-interview part 2',
+                },
+            },
+        ],
+        'params': {
+            'skip_download': True,
+        },
     }, {
         'url': 'http://thedailyshow.cc.com/extended-interviews/xm3fnq/andrew-napolitano-extended-interview',
         'only_matching': True,
@@ -117,12 +154,7 @@ class ComedyCentralShowsIE(MTVServicesInfoExtractor):
         mobj = re.match(self._VALID_URL, url)
 
         if mobj.group('shortname'):
-            if mobj.group('shortname') in ('tds', 'thedailyshow'):
-                url = 'http://thedailyshow.cc.com/full-episodes/'
-            else:
-                url = 'http://thecolbertreport.cc.com/full-episodes/'
-            mobj = re.match(self._VALID_URL, url, re.VERBOSE)
-            assert mobj is not None
+            return self.url_result('http://www.cc.com/shows/the-daily-show-with-trevor-noah/full-episodes')
 
         if mobj.group('clip'):
             if mobj.group('videotitle'):
@@ -163,13 +195,13 @@ class ComedyCentralShowsIE(MTVServicesInfoExtractor):
             if len(altMovieParams) == 0:
                 raise ExtractorError('unable to find Flash URL in webpage ' + url)
             else:
-                mMovieParams = [("http://media.mtvnservices.com/" + altMovieParams[0], altMovieParams[0])]
+                mMovieParams = [('http://media.mtvnservices.com/' + altMovieParams[0], altMovieParams[0])]
 
         uri = mMovieParams[0][1]
         # Correct cc.com in uri
-        uri = re.sub(r'(episode:[^.]+)(\.cc)?\.com', r'\1.cc.com', uri)
+        uri = re.sub(r'(episode:[^.]+)(\.cc)?\.com', r'\1.com', uri)
 
-        index_url = 'http://%s.cc.com/feeds/mrss?%s' % (show_name, compat_urllib_parse.urlencode({'uri': uri}))
+        index_url = 'http://%s.cc.com/feeds/mrss?%s' % (show_name, compat_urllib_parse_urlencode({'uri': uri}))
         idoc = self._download_xml(
             index_url, epTitle,
             'Downloading show index', 'Unable to download episode index')
@@ -216,6 +248,8 @@ class ComedyCentralShowsIE(MTVServicesInfoExtractor):
                 })
                 self._sort_formats(formats)
 
+            subtitles = self._extract_subtitles(cdoc, guid)
+
             virtual_id = show_name + ' ' + epTitle + ' part ' + compat_str(part_num + 1)
             entries.append({
                 'id': guid,
@@ -226,10 +260,12 @@ class ComedyCentralShowsIE(MTVServicesInfoExtractor):
                 'duration': duration,
                 'thumbnail': thumbnail,
                 'description': description,
+                'subtitles': subtitles,
             })
 
         return {
             '_type': 'playlist',
+            'id': epTitle,
             'entries': entries,
             'title': show_name + ' ' + title,
             'description': description,

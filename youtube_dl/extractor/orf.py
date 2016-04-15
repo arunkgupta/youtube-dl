@@ -11,6 +11,11 @@ from ..utils import (
     HEADRequest,
     unified_strdate,
     ExtractorError,
+    strip_jsonp,
+    int_or_none,
+    float_or_none,
+    determine_ext,
+    remove_end,
 )
 
 
@@ -107,6 +112,7 @@ class ORFTVthekIE(InfoExtractor):
                             % geo_str),
                         fatal=False)
 
+            self._check_formats(formats, video_id)
             self._sort_formats(formats)
 
             upload_date = unified_strdate(sd['created_date'])
@@ -128,13 +134,16 @@ class ORFTVthekIE(InfoExtractor):
         }
 
 
-# Audios on ORF radio are only available for 7 days, so we can't add tests.
-
-
 class ORFOE1IE(InfoExtractor):
     IE_NAME = 'orf:oe1'
     IE_DESC = 'Radio Österreich 1'
-    _VALID_URL = r'http://oe1\.orf\.at/programm/(?P<id>[0-9]+)'
+    _VALID_URL = r'https?://oe1\.orf\.at/(?:programm/|konsole.*?#\?track_id=)(?P<id>[0-9]+)'
+
+    # Audios on ORF radio are only available for 7 days, so we can't add tests.
+    _TEST = {
+        'url': 'http://oe1.orf.at/konsole?show=on_demand#?track_id=394211',
+        'only_matching': True,
+    }
 
     def _real_extract(self, url):
         show_id = self._match_id(url)
@@ -160,9 +169,23 @@ class ORFOE1IE(InfoExtractor):
 
 
 class ORFFM4IE(InfoExtractor):
-    IE_DESC = 'orf:fm4'
+    IE_NAME = 'orf:fm4'
     IE_DESC = 'radio FM4'
-    _VALID_URL = r'http://fm4\.orf\.at/7tage/?#(?P<date>[0-9]+)/(?P<show>\w+)'
+    _VALID_URL = r'https?://fm4\.orf\.at/(?:7tage/?#|player/)(?P<date>[0-9]+)/(?P<show>\w+)'
+
+    _TEST = {
+        'url': 'http://fm4.orf.at/player/20160110/IS/',
+        'md5': '01e736e8f1cef7e13246e880a59ad298',
+        'info_dict': {
+            'id': '2016-01-10_2100_tl_54_7DaysSun13_11244',
+            'ext': 'mp3',
+            'title': 'Im Sumpf',
+            'description': 'md5:384c543f866c4e422a55f66a62d669cd',
+            'duration': 7173,
+            'timestamp': 1452456073,
+            'upload_date': '20160110',
+        },
+    }
 
     def _real_extract(self, url):
         mobj = re.match(self._VALID_URL, url)
@@ -193,4 +216,93 @@ class ORFFM4IE(InfoExtractor):
             'title': data['title'],
             'description': data['subtitle'],
             'entries': entries
+        }
+
+
+class ORFIPTVIE(InfoExtractor):
+    IE_NAME = 'orf:iptv'
+    IE_DESC = 'iptv.ORF.at'
+    _VALID_URL = r'https?://iptv\.orf\.at/(?:#/)?stories/(?P<id>\d+)'
+
+    _TEST = {
+        'url': 'http://iptv.orf.at/stories/2275236/',
+        'md5': 'c8b22af4718a4b4af58342529453e3e5',
+        'info_dict': {
+            'id': '350612',
+            'ext': 'flv',
+            'title': 'Weitere Evakuierungen um Vulkan Calbuco',
+            'description': 'md5:d689c959bdbcf04efeddedbf2299d633',
+            'duration': 68.197,
+            'thumbnail': 're:^https?://.*\.jpg$',
+            'upload_date': '20150425',
+        },
+    }
+
+    def _real_extract(self, url):
+        story_id = self._match_id(url)
+
+        webpage = self._download_webpage(
+            'http://iptv.orf.at/stories/%s' % story_id, story_id)
+
+        video_id = self._search_regex(
+            r'data-video(?:id)?="(\d+)"', webpage, 'video id')
+
+        data = self._download_json(
+            'http://bits.orf.at/filehandler/static-api/json/current/data.json?file=%s' % video_id,
+            video_id)[0]
+
+        duration = float_or_none(data['duration'], 1000)
+
+        video = data['sources']['default']
+        load_balancer_url = video['loadBalancerUrl']
+        abr = int_or_none(video.get('audioBitrate'))
+        vbr = int_or_none(video.get('bitrate'))
+        fps = int_or_none(video.get('videoFps'))
+        width = int_or_none(video.get('videoWidth'))
+        height = int_or_none(video.get('videoHeight'))
+        thumbnail = video.get('preview')
+
+        rendition = self._download_json(
+            load_balancer_url, video_id, transform_source=strip_jsonp)
+
+        f = {
+            'abr': abr,
+            'vbr': vbr,
+            'fps': fps,
+            'width': width,
+            'height': height,
+        }
+
+        formats = []
+        for format_id, format_url in rendition['redirect'].items():
+            if format_id == 'rtmp':
+                ff = f.copy()
+                ff.update({
+                    'url': format_url,
+                    'format_id': format_id,
+                })
+                formats.append(ff)
+            elif determine_ext(format_url) == 'f4m':
+                formats.extend(self._extract_f4m_formats(
+                    format_url, video_id, f4m_id=format_id))
+            elif determine_ext(format_url) == 'm3u8':
+                formats.extend(self._extract_m3u8_formats(
+                    format_url, video_id, 'mp4', m3u8_id=format_id))
+            else:
+                continue
+        self._sort_formats(formats)
+
+        title = remove_end(self._og_search_title(webpage), ' - iptv.ORF.at')
+        description = self._og_search_description(webpage)
+        upload_date = unified_strdate(self._html_search_meta(
+            'dc.date', webpage, 'upload date'))
+
+        return {
+            'id': video_id,
+            'title': title,
+            'description': description,
+            'duration': duration,
+            'thumbnail': thumbnail,
+            'upload_date': upload_date,
+            'formats': formats,
         }
